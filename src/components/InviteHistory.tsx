@@ -8,7 +8,7 @@ interface InviteHistoryProps {
     isLoading: boolean;
 }
 
-export function InviteHistory({ history, isLoading }: InviteHistoryProps) {
+export function InviteHistory({ history, isLoading, onDelete }: InviteHistoryProps & { onDelete: (id: string) => Promise<void> }) {
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
     const handleCopy = async (item: InviteHistoryItem) => {
@@ -120,9 +120,7 @@ export function InviteHistory({ history, isLoading }: InviteHistoryProps) {
                                 <th className="text-left py-4 px-6 text-xs font-medium text-surface-500 dark:text-surface-400 uppercase tracking-wider">
                                     Assigned Group
                                 </th>
-                                <th className="text-left py-4 px-6 text-xs font-medium text-surface-500 dark:text-surface-400 uppercase tracking-wider">
-                                    Created At
-                                </th>
+
                                 <th className="text-left py-3 px-4 text-xs font-medium text-surface-500 dark:text-surface-400 uppercase tracking-wider">
                                     Expires
                                 </th>
@@ -142,7 +140,11 @@ export function InviteHistory({ history, isLoading }: InviteHistoryProps) {
                                             ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400'
                                             : 'bg-surface-100 text-surface-800 dark:bg-surface-800 dark:text-surface-400'
                                             }`}>
-                                            {(item.status || 'ACTIVE') === 'ACTIVE' ? 'Active' : 'Exhausted'}
+                                            {(item.status || 'ACTIVE') === 'ACTIVE'
+                                                ? 'Active'
+                                                : item.status === 'DELETED'
+                                                    ? 'Deleted'
+                                                    : 'Exhausted'}
                                         </span>
                                     </td>
                                     <td className="py-4 px-4">
@@ -159,27 +161,70 @@ export function InviteHistory({ history, isLoading }: InviteHistoryProps) {
                                             <span className="text-surface-400">-</span>
                                         )}
                                     </td>
-                                    <td className="py-4 px-6 text-sm text-surface-500 dark:text-surface-400">
-                                        {new Date(item.createdAt).toLocaleDateString()}
-                                    </td>
                                     <td className="py-4 px-4">
                                         <span className="text-sm text-surface-600 dark:text-surface-400">
                                             {item.expiresAt ? formatDate(item.expiresAt) : 'Never'}
                                         </span>
                                     </td>
                                     <td className="py-4 px-4 text-right">
-                                        <button
-                                            onClick={() => handleCopy(item)}
-                                            disabled={item.status === 'EXHAUSTED'}
-                                            className={`btn-ghost text-sm ${item.status === 'EXHAUSTED'
-                                                ? "opacity-40 cursor-not-allowed"
-                                                : copiedId === item.invite_uuid
-                                                    ? "text-emerald-600 dark:text-emerald-400"
-                                                    : ""
-                                                }`}
-                                        >
-                                            {copiedId === item.invite_uuid ? (
-                                                <span className="flex items-center gap-1">
+                                        <div className="flex items-center justify-end gap-2">
+                                            <button
+                                                onClick={() => handleCopy(item)}
+                                                disabled={item.status === 'EXHAUSTED' || item.status === 'DELETED'}
+                                                className={`btn-ghost text-sm ${item.status === 'EXHAUSTED' || item.status === 'DELETED'
+                                                    ? "opacity-40 cursor-not-allowed"
+                                                    : copiedId === item.invite_uuid
+                                                        ? "text-emerald-600 dark:text-emerald-400"
+                                                        : ""
+                                                    }`}
+                                            >
+                                                {copiedId === item.invite_uuid ? (
+                                                    <span className="flex items-center gap-1">
+                                                        <svg
+                                                            className="w-4 h-4"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                strokeWidth={2}
+                                                                d="M5 13l4 4L19 7"
+                                                            />
+                                                        </svg>
+                                                        Copied
+                                                    </span>
+                                                ) : (
+                                                    <span className="flex items-center gap-1">
+                                                        <svg
+                                                            className="w-4 h-4"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                strokeWidth={2}
+                                                                d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+                                                            />
+                                                        </svg>
+                                                        Copy Link
+                                                    </span>
+                                                )}
+                                            </button>
+
+                                            {(item.status || 'ACTIVE') === 'ACTIVE' && (
+                                                <button
+                                                    onClick={() => {
+                                                        if (window.confirm("Are you sure you want to delete this invite? It will no longer be usable.")) {
+                                                            onDelete(item.invite_uuid);
+                                                        }
+                                                    }}
+                                                    className="btn-ghost text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                    title="Delete Invite"
+                                                >
                                                     <svg
                                                         className="w-4 h-4"
                                                         fill="none"
@@ -190,30 +235,12 @@ export function InviteHistory({ history, isLoading }: InviteHistoryProps) {
                                                             strokeLinecap="round"
                                                             strokeLinejoin="round"
                                                             strokeWidth={2}
-                                                            d="M5 13l4 4L19 7"
+                                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                                                         />
                                                     </svg>
-                                                    Copied
-                                                </span>
-                                            ) : (
-                                                <span className="flex items-center gap-1">
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        viewBox="0 0 24 24"
-                                                        stroke="currentColor"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
-                                                        />
-                                                    </svg>
-                                                    Copy Link
-                                                </span>
+                                                </button>
                                             )}
-                                        </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

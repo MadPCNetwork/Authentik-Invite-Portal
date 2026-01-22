@@ -319,7 +319,7 @@ export function CreateInviteForm({
                         )}
 
                         {/* Action Buttons */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-1">
                             <button
                                 type="submit"
                                 disabled={isDisabled}

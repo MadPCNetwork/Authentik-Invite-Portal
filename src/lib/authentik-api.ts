@@ -129,6 +129,10 @@ export class AuthentikAPI {
             throw new Error(errorMessage);
         }
 
+        if (response.status === 204) {
+            return null as unknown as Promise<T>;
+        }
+
         return response.json() as Promise<T>;
     }
 

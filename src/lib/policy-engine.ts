@@ -195,8 +195,9 @@ export class PolicyEngine {
     }
 
     private async countUserInvites(userSub: string, since?: Date): Promise<number> {
-        const where: { user_sub: string; createdAt?: { gte: Date } } = {
+        const where: { user_sub: string; createdAt?: { gte: Date }; status?: { not: string } } = {
             user_sub: userSub,
+            status: { not: "DELETED" },
         };
 
         if (since) {
@@ -273,12 +274,47 @@ export class PolicyEngine {
         userSub: string,
         limit: number = 50
     ): Promise<Array<{ id: string; invite_uuid: string; createdAt: Date; expiresAt: Date | null; status: string, invite_group: string | null }>> {
-        const logs = await prisma.userQuotaLog.findMany({
+        // Fetch ALL active invites to ensure they are never hidden
+        const activeInvites = await prisma.userQuotaLog.findMany({
+            where: {
+                user_sub: userSub,
+                status: "ACTIVE"
+            },
+            orderBy: { createdAt: "desc" },
+        });
+
+        // Fetch recent history
+        const recentHistory = await prisma.userQuotaLog.findMany({
             where: { user_sub: userSub },
             orderBy: { createdAt: "desc" },
             take: limit,
         });
-        return logs;
+
+        // Combine and deduplicate
+        const historyMap = new Map<string, typeof activeInvites[0]>();
+
+        // Add active ones first
+        activeInvites.forEach(item => historyMap.set(item.id, item));
+
+        // Add recent ones
+        recentHistory.forEach(item => {
+            if (!historyMap.has(item.id)) {
+                historyMap.set(item.id, item);
+            }
+        });
+
+        // Convert to array and sort: Active first, then date desc
+        const combined = Array.from(historyMap.values());
+
+        return combined.sort((a, b) => {
+            const aActive = a.status === 'ACTIVE';
+            const bActive = b.status === 'ACTIVE';
+
+            if (aActive && !bActive) return -1;
+            if (!aActive && bActive) return 1;
+
+            return b.createdAt.getTime() - a.createdAt.getTime();
+        });
     }
 
     /**
@@ -298,6 +334,16 @@ export class PolicyEngine {
         await prisma.userQuotaLog.update({
             where: { id },
             data: { status: "EXHAUSTED" },
+        });
+    }
+
+    /**
+     * Updates an invite status to DELETED (does not count towards quota).
+     */
+    async markInviteDeleted(id: string): Promise<void> {
+        await prisma.userQuotaLog.update({
+            where: { id },
+            data: { status: "DELETED" },
         });
     }
 

@@ -94,9 +94,28 @@ export default function DashboardPage() {
                         />
                     </div>
 
-                    {/* Right Column - History */}
                     <div className="lg:col-span-2">
-                        <InviteHistory history={history} isLoading={isLoadingHistory} />
+                        <InviteHistory
+                            history={history}
+                            isLoading={isLoadingHistory}
+                            onDelete={async (id) => {
+                                try {
+                                    const response = await fetch(`/api/user/invite/${id}`, {
+                                        method: 'DELETE',
+                                    });
+                                    if (response.ok) {
+                                        fetchHistory(); // Refresh list
+                                        fetchQuota();   // Refresh quota (if applicable)
+                                    } else {
+                                        console.error('Failed to delete invite');
+                                        alert('Failed to delete invite');
+                                    }
+                                } catch (error) {
+                                    console.error('Error deleting invite:', error);
+                                    alert('Error deleting invite');
+                                }
+                            }}
+                        />
                     </div>
                 </div>
             </div>

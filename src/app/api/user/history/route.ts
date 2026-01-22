@@ -53,6 +53,17 @@ export async function GET() {
         // Format for response
         const baseUrl = process.env.AUTHENTIK_API_URL?.replace(/\/$/, "") ?? "";
 
+        // Re-sort: Active first, then by Date desc
+        syncedHistory.sort((a, b) => {
+            const aActive = a.status === 'ACTIVE';
+            const bActive = b.status === 'ACTIVE';
+
+            if (aActive && !bActive) return -1;
+            if (!aActive && bActive) return 1;
+
+            return b.createdAt.getTime() - a.createdAt.getTime();
+        });
+
         const formattedHistory = syncedHistory.map((item) => ({
             id: item.id,
             invite_uuid: item.invite_uuid,
