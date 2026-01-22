@@ -1,0 +1,26 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model UserQuotaLog {
+  id          String   @id @default(uuid())
+  user_sub    String
+  createdAt   DateTime @default(now())
+  invite_uuid String
+  invite_group String? // Optional: store which group was assigned
+
+  expiresAt   DateTime?
+  status      String   @default("ACTIVE") // ACTIVE, EXHAUSTED
+
+  @@index([user_sub])
+  @@index([createdAt])
+  @@index([status])
+}

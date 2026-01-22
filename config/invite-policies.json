@@ -1,0 +1,33 @@
+{
+    "policies": [
+        {
+            "group": "Legend",
+            "quota": {
+                "strategy": "recurring",
+                "limit": 3,
+                "period": "month"
+            },
+            "invite": {
+                "max_expiry": "7d",
+                "allow_multi_use": false,
+                "allowed_groups": [
+                    "MadPC",
+                    "Legend"
+                ]
+            }
+        }
+    ],
+    "default": {
+        "quota": {
+            "strategy": "fixed",
+            "limit": 1
+        },
+        "invite": {
+            "max_expiry": "24h",
+            "allow_multi_use": false,
+            "allowed_groups": [
+                "MadPC"
+            ]
+        }
+    }
+}

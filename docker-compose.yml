@@ -1,0 +1,48 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: invite-portal
+    restart: unless-stopped
+    ports:
+      - "3099:3000"
+    environment:
+      # Authentik OIDC Configuration
+      - AUTHENTIK_ISSUER_URL=${AUTHENTIK_ISSUER_URL}
+      - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID}
+      - AUTHENTIK_CLIENT_SECRET=${AUTHENTIK_CLIENT_SECRET}
+      - AUTHENTIK_FLOW_SLUG=${AUTHENTIK_FLOW_SLUG}
+      
+      # Authentik API Configuration
+      - AUTHENTIK_API_URL=${AUTHENTIK_API_URL}
+      - AUTHENTIK_API_TOKEN=${AUTHENTIK_API_TOKEN}
+      
+      # Admin Configuration
+      - ADMIN_GROUP_NAME=${ADMIN_GROUP_NAME:-Invite Portal Admins}
+      
+      # NextAuth Configuration
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      
+      # Database
+      - DATABASE_URL=file:/app/prisma/data/invite-portal.db
+      
+      # Public environment variables (for client-side)
+      - NEXT_PUBLIC_ADMIN_GROUP_NAME=${ADMIN_GROUP_NAME:-Invite Portal Admins}
+      - NEXT_PUBLIC_AUTHENTIK_URL=${AUTHENTIK_API_URL}
+    volumes:
+      # Persist SQLite database
+      - sqlite-data:/app/prisma/data
+      # Mount config for easier updates
+      - ./config:/app/config
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  sqlite-data:
+    driver: local
