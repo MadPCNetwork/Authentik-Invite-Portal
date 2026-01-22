@@ -24,3 +24,19 @@ model UserQuotaLog {
   @@index([createdAt])
   @@index([status])
 }
+
+model BulkInviteJob {
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  status      String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  
+  total       Int      @default(0)
+  processed   Int      @default(0)
+  failed      Int      @default(0)
+  
+  result      String?  // JSON string for details/errors
+
+  creatorSub  String   @default("")  // Will remove default after migration or keep if lazy
+}

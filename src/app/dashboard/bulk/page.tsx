@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Navbar } from "@/components/Navbar";
 import { QuotaDisplay } from "@/components/QuotaDisplay";
 import { BulkInviteForm } from "@/components/BulkInviteForm";
+import { BulkJobHistory } from "@/components/BulkJobHistory";
 import { QuotaStatus } from "@/lib/schemas";
 import { useRouter } from "next/navigation";
 
@@ -56,6 +57,8 @@ export default function BulkPage() {
         }
     }, [status, fetchQuota, router]);
 
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+
     const handleBulkInvite = async (data: any) => {
         const response = await fetch("/api/bulk-invite", {
             method: "POST",
@@ -69,14 +72,15 @@ export default function BulkPage() {
             throw new Error(result.error || "Failed to process bulk invites");
         }
 
-        // Refresh quota
+        // Refresh quota & history
         fetchQuota();
+        setRefreshTrigger(prev => prev + 1);
 
-        // If there were failed items, maybe show them? 
-        // For now, the form handles the success/error summary display implicitly via its own local state or toast
         if (result.results && result.results.failed > 0) {
             throw new Error(`Completed with errors: ${result.results.successful} successful, ${result.results.failed} failed.`);
         }
+
+        return result;
     };
 
     if (status === "loading" || isLoadingQuota) {
@@ -124,6 +128,8 @@ export default function BulkPage() {
                                 <li>Emails are sent automatically.</li>
                             </ul>
                         </div>
+
+                        <BulkJobHistory refreshTrigger={refreshTrigger} />
                     </div>
 
                     {/* Right Column - Form */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { QuotaStatus } from "@/lib/schemas";
 
 interface ExpiryOption {
@@ -11,7 +11,7 @@ interface BulkInviteFormProps {
     quota: QuotaStatus | null;
     expiryOptions: ExpiryOption[];
     groups: { name: string; groups: string[] }[]; // Updated type
-    onBulkInvite: (data: any) => Promise<void>;
+    onBulkInvite: (data: any) => Promise<any>;
 }
 
 const DEFAULT_EMAIL_MESSAGE = `You have been invited by {{inviter_username}} to create an account.
@@ -19,6 +19,7 @@ Please accept this invitation to access your resources by clicking the link belo
 {{invite_url}}
 
 Note: This invitation is valid until {{expiration_date}}.`;
+
 export function BulkInviteForm({
     quota,
     expiryOptions,
@@ -32,8 +33,16 @@ export function BulkInviteForm({
     const [singleUse, setSingleUse] = useState(true);
     // Initialize with first group if available
     const [selectedGroupings, setSelectedGroupings] = useState<string[]>(groups.length > 0 ? [groups[0].name] : []);
+
+    // Status & Jobs
+    const [jobId, setJobId] = useState<string | null>(null);
+    const [jobStatus, setJobStatus] = useState<string | null>(null);
+    const [jobProgress, setJobProgress] = useState({ total: 0, processed: 0, failed: 0 });
     const [isLoading, setIsLoading] = useState(false);
     const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+
+    // Polling Ref
+    const pollInterval = useRef<NodeJS.Timeout | null>(null);
 
     // Calculate approximate count based on lines/commas
     const emailCount = emails
@@ -41,10 +50,53 @@ export function BulkInviteForm({
         .map(e => e.trim())
         .filter(e => e.length > 0).length;
 
+    useEffect(() => {
+        if (jobId && (jobStatus === 'PENDING' || jobStatus === 'PROCESSING')) {
+            pollInterval.current = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/bulk-invite/${jobId}/status`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        setJobStatus(data.status);
+                        setJobProgress({
+                            total: data.total,
+                            processed: data.processed,
+                            failed: data.failed
+                        });
+
+                        if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+                            if (pollInterval.current) clearInterval(pollInterval.current);
+                            setIsLoading(false);
+                            if (data.status === 'COMPLETED') {
+                                setStatus({
+                                    type: 'success',
+                                    message: `Completed! Sent: ${data.processed - data.failed}, Failed: ${data.failed}`
+                                });
+                                // Clear inputs on success
+                                setEmails("");
+                            } else {
+                                setStatus({ type: 'error', message: "Job failed to complete." });
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error("Polling error", e);
+                }
+            }, 1000);
+        }
+
+        return () => {
+            if (pollInterval.current) clearInterval(pollInterval.current);
+        };
+    }, [jobId, jobStatus]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setStatus(null);
         setIsLoading(true);
+        setJobId(null);
+        setJobStatus('PENDING');
+        setJobProgress({ total: 0, processed: 0, failed: 0 });
 
         if (emailCount === 0) {
             setStatus({ type: 'error', message: "Please enter at least one email address." });
@@ -59,21 +111,32 @@ export function BulkInviteForm({
         }
 
         try {
-            await onBulkInvite({
+            const result = await onBulkInvite({
                 emails,
                 message,
                 expiry,
                 singleUse,
                 groups: selectedGroupings,
             });
-            setStatus({ type: 'success', message: "Bulk invite process started." });
-            setEmails("");
+
+            if (result && result.jobId) {
+                setJobId(result.jobId);
+                // Status remains loading until job completes
+                setStatus({ type: 'success', message: "Processing started..." });
+            } else {
+                // Fallback if API didn't return jobId (old behavior?)
+                setIsLoading(false);
+                setStatus({
+                    type: result?.success ? 'success' : 'error',
+                    message: result?.error || "Request processed"
+                });
+            }
+
         } catch (err) {
             setStatus({
                 type: 'error',
                 message: err instanceof Error ? err.message : "Failed to process bulk invites"
             });
-        } finally {
             setIsLoading(false);
         }
     };
@@ -87,6 +150,10 @@ export function BulkInviteForm({
             }
         });
     };
+
+    const progressPercent = jobProgress.total > 0
+        ? Math.round((jobProgress.processed / jobProgress.total) * 100)
+        : 0;
 
     return (
         <div className="card p-6">
@@ -110,6 +177,7 @@ export function BulkInviteForm({
                         placeholder="alice@example.com&#10;bob@example.com"
                         className="input min-h-[150px] font-mono text-sm"
                         required
+                        disabled={isLoading}
                     />
                 </div>
 
@@ -127,13 +195,14 @@ export function BulkInviteForm({
                                     return (
                                         <div
                                             key={grouping.name}
-                                            onClick={() => toggleGrouping(grouping.name)}
+                                            onClick={() => !isLoading && toggleGrouping(grouping.name)}
                                             className={`
                                                 relative flex items-start gap-3 p-3 rounded-lg cursor-pointer border transition-all
                                                 ${isSelected
                                                     ? "bg-primary-50 border-primary-200 dark:bg-primary-900/20 dark:border-primary-800"
                                                     : "bg-surface-100 dark:bg-surface-800 border-transparent hover:border-surface-300 dark:hover:border-surface-600"
                                                 }
+                                                ${isLoading ? 'opacity-50 pointer-events-none' : ''}
                                             `}
                                         >
                                             <div className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors
@@ -173,6 +242,7 @@ export function BulkInviteForm({
                             value={expiry}
                             onChange={(e) => setExpiry(e.target.value)}
                             className="input"
+                            disabled={isLoading}
                         >
                             {expiryOptions.map((option) => (
                                 <option key={option.value} value={option.value}>
@@ -194,6 +264,7 @@ export function BulkInviteForm({
                         onChange={(e) => setMessage(e.target.value)}
                         className="input min-h-[120px]"
                         required
+                        disabled={isLoading}
                     />
                     <p className="text-xs text-surface-500 mt-1">
                         Variables: {`{{inviter_username}}`}, {`{{expiration_date}}`}, {`{{invite_url}}`}
@@ -201,7 +272,7 @@ export function BulkInviteForm({
                 </div>
 
                 {/* Multi-use Toggle */}
-                <div className="flex items-center justify-between p-4 bg-surface-50 dark:bg-surface-800 rounded-xl">
+                <div className={`flex items-center justify-between p-4 bg-surface-50 dark:bg-surface-800 rounded-xl ${isLoading ? 'opacity-50' : ''}`}>
                     <div>
                         <p className="font-medium text-surface-900 dark:text-white">
                             Single Use Links
@@ -214,7 +285,8 @@ export function BulkInviteForm({
                     </div>
                     <button
                         type="button"
-                        onClick={() => setSingleUse(!singleUse)}
+                        onClick={() => !isLoading && setSingleUse(!singleUse)}
+                        disabled={isLoading}
                         className={`relative w-14 h-8 rounded-full transition-colors ${singleUse
                             ? "bg-primary-500"
                             : "bg-surface-300 dark:bg-surface-600"
@@ -227,13 +299,30 @@ export function BulkInviteForm({
                     </button>
                 </div>
 
-                {/* Status Message */}
+                {/* Status Message & Progress */}
                 {status && (
                     <div className={`p-4 rounded-xl border ${status.type === 'error'
                         ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
                         : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
                         }`}>
-                        {status.message}
+                        <div className="flex items-center justify-between">
+                            <span>{status.message}</span>
+                        </div>
+                    </div>
+                )}
+
+                {isLoading && (
+                    <div className="space-y-2">
+                        <div className="flex justify-between text-sm text-surface-500">
+                            <span>Progress</span>
+                            <span>{jobProgress.processed} / {jobProgress.total}</span>
+                        </div>
+                        <div className="h-2 w-full bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-primary-500 transition-all duration-300 ease-out"
+                                style={{ width: `${progressPercent}%` }}
+                            />
+                        </div>
                     </div>
                 )}
 
@@ -249,7 +338,7 @@ export function BulkInviteForm({
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                             </svg>
-                            Processing Bulk Invite...
+                            Sending...
                         </span>
                     ) : (
                         "Send Bulk Invites"
