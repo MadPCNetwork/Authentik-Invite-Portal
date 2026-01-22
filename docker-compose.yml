@@ -29,6 +29,15 @@ services:
       # Database
       - DATABASE_URL=file:/app/prisma/data/invite-portal.db
       
+      # SMTP Configuration
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_USE_TLS=${SMTP_USE_TLS}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - APP_NAME=${APP_NAME}
+
       # Public environment variables (for client-side)
       - NEXT_PUBLIC_ADMIN_GROUP_NAME=${ADMIN_GROUP_NAME:-Invite Portal Admins}
       - NEXT_PUBLIC_AUTHENTIK_URL=${AUTHENTIK_API_URL}

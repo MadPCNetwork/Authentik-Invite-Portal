@@ -35,6 +35,8 @@ export const GenerateInviteRequestSchema = z.object({
     expiry: z.string().min(1, "Expiry is required"),
     singleUse: z.boolean().default(true),
     group: z.string().optional(),
+    emailRecipient: z.string().email().optional(),
+    emailMessage: z.string().optional(),
 });
 
 export const GenerateInviteResponseSchema = z.object({

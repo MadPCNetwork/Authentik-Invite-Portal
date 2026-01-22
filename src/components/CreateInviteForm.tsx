@@ -1,7 +1,6 @@
-"use client";
-
 import { useState, useEffect } from "react";
 import { QuotaStatus } from "@/lib/schemas";
+import { EmailInviteModal } from "./EmailInviteModal";
 
 interface ExpiryOption {
     value: string;
@@ -14,6 +13,12 @@ interface CreateInviteFormProps {
     allowMultiUse: boolean;
     onInviteCreated: () => void;
 }
+
+const DEFAULT_EMAIL_MESSAGE = `You have been invited by {{inviter_username}} to create an account.
+Please accept this invitation to access your resources by clicking the link below:
+{{invite_url}}
+
+Note: This invitation is valid until {{expiration_date}}.`;
 
 export function CreateInviteForm({
     quota,
@@ -29,7 +34,11 @@ export function CreateInviteForm({
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successUrl, setSuccessUrl] = useState<string | null>(null);
+    const [warning, setWarning] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+
+    // Email Modal State
+    const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
     // Fetch allowed groups on mount
     useEffect(() => {
@@ -50,22 +59,29 @@ export function CreateInviteForm({
         isLoading ||
         (!quota?.isUnlimited && (quota?.remaining ?? 0) <= 0);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleGenerate = async (emailData?: { recipient: string; message: string }) => {
         setError(null);
+        setWarning(null);
         setSuccessUrl(null);
         setIsLoading(true);
 
         try {
+            const body: any = {
+                name: name || `Invite ${new Date().toLocaleDateString()}`,
+                expiry,
+                singleUse,
+                group: selectedGroup,
+            };
+
+            if (emailData) {
+                body.emailRecipient = emailData.recipient;
+                body.emailMessage = emailData.message;
+            }
+
             const response = await fetch("/api/generate-invite", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: name || `Invite ${new Date().toLocaleDateString()}`,
-                    expiry,
-                    singleUse,
-                    group: selectedGroup,
-                }),
+                body: JSON.stringify(body),
             });
 
             const data = await response.json();
@@ -74,14 +90,40 @@ export function CreateInviteForm({
                 throw new Error(data.error ?? "Failed to create invite");
             }
 
-            setSuccessUrl(data.inviteUrl);
-            setName("");
-            onInviteCreated();
+            if (emailData) {
+                if (data.message) {
+                    // Email failed, but invite created. Show URL and Warning.
+                    setSuccessUrl(data.inviteUrl);
+                    setWarning(data.message);
+                    setIsEmailModalOpen(false);
+                    onInviteCreated();
+                } else {
+                    // Success fully
+                    onInviteCreated();
+                    setIsEmailModalOpen(false);
+                    setName("");
+                    // Maybe just show a simple toast or status check
+                    // For now, clear everything as "Done"
+                }
+            } else {
+                setSuccessUrl(data.inviteUrl);
+                setName("");
+                onInviteCreated();
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : "An error occurred");
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await handleGenerate();
+    };
+
+    const handleSendEmail = async (recipient: string, message: string) => {
+        await handleGenerate({ recipient, message });
     };
 
     const handleCopy = async () => {
@@ -126,6 +168,17 @@ export function CreateInviteForm({
 
             {successUrl ? (
                 <div className="animate-slide-up">
+                    {warning && (
+                        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 mb-4">
+                            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                                <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                <span className="text-sm font-medium">{warning}</span>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800 mb-4">
                         <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 mb-2">
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -153,157 +206,169 @@ export function CreateInviteForm({
                         </div>
                     </div>
                     <button
-                        onClick={() => setSuccessUrl(null)}
+                        onClick={() => {
+                            setSuccessUrl(null);
+                            setWarning(null);
+                        }}
                         className="btn-ghost text-sm w-full"
                     >
                         Create Another Invite
                     </button>
                 </div>
             ) : (
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    {/* Name Input */}
-                    <div>
-                        <label htmlFor="name" className="label">
-                            Invite Name <span className="text-surface-400">(optional)</span>
-                        </label>
-                        <input
-                            id="name"
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="e.g., John's Invite"
-                            className="input"
-                            maxLength={100}
-                        />
-                    </div>
-
-                    {/* Group Select */}
-                    {groups.length > 0 && (
+                <>
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        {/* Name Input */}
                         <div>
-                            <label htmlFor="group" className="label">
-                                Add to Group
+                            <label htmlFor="name" className="label">
+                                Invite Name <span className="text-surface-400">(optional)</span>
+                            </label>
+                            <input
+                                id="name"
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="e.g., John's Invite"
+                                className="input"
+                                maxLength={100}
+                            />
+                        </div>
+
+                        {/* Group Select */}
+                        {groups.length > 0 && (
+                            <div>
+                                <label htmlFor="group" className="label">
+                                    Add to Group
+                                </label>
+                                <select
+                                    id="group"
+                                    value={selectedGroup}
+                                    onChange={(e) => setSelectedGroup(e.target.value)}
+                                    className="input"
+                                >
+                                    {groups.map((group) => (
+                                        <option key={group} value={group}>
+                                            {group}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {/* Expiry Select */}
+                        <div>
+                            <label htmlFor="expiry" className="label">
+                                Expires After
                             </label>
                             <select
-                                id="group"
-                                value={selectedGroup}
-                                onChange={(e) => setSelectedGroup(e.target.value)}
+                                id="expiry"
+                                value={expiry}
+                                onChange={(e) => setExpiry(e.target.value)}
                                 className="input"
                             >
-                                {groups.map((group) => (
-                                    <option key={group} value={group}>
-                                        {group}
+                                {expiryOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
                                     </option>
                                 ))}
                             </select>
                         </div>
-                    )}
 
-                    {/* Expiry Select */}
-                    <div>
-                        <label htmlFor="expiry" className="label">
-                            Expires After
-                        </label>
-                        <select
-                            id="expiry"
-                            value={expiry}
-                            onChange={(e) => setExpiry(e.target.value)}
-                            className="input"
-                        >
-                            {expiryOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Multi-use Toggle */}
-                    {allowMultiUse && (
-                        <div className="flex items-center justify-between p-4 bg-surface-50 dark:bg-surface-800 rounded-xl">
-                            <div>
-                                <p className="font-medium text-surface-900 dark:text-white">
-                                    Single Use
-                                </p>
-                                <p className="text-sm text-surface-500 dark:text-surface-400">
-                                    Invite can only be used once
-                                </p>
+                        {/* Multi-use Toggle */}
+                        {allowMultiUse && (
+                            <div className="flex items-center justify-between p-4 bg-surface-50 dark:bg-surface-800 rounded-xl">
+                                <div>
+                                    <p className="font-medium text-surface-900 dark:text-white">
+                                        Single Use
+                                    </p>
+                                    <p className="text-sm text-surface-500 dark:text-surface-400">
+                                        Invite can only be used once
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setSingleUse(!singleUse)}
+                                    className={`relative w-14 h-8 rounded-full transition-colors ${singleUse
+                                        ? "bg-primary-500"
+                                        : "bg-surface-300 dark:bg-surface-600"
+                                        }`}
+                                >
+                                    <span
+                                        className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow transition-transform ${singleUse ? "translate-x-6" : "translate-x-0"
+                                            }`}
+                                    />
+                                </button>
                             </div>
+                        )}
+
+                        {/* Error Message */}
+                        {error && (
+                            <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                                <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                        />
+                                    </svg>
+                                    <span className="text-sm">{error}</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                type="submit"
+                                disabled={isDisabled}
+                                className="btn-primary"
+                            >
+                                {isLoading ? (
+                                    <span className="flex items-center gap-2">
+                                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                        Creating...
+                                    </span>
+                                ) : !quota?.isUnlimited && (quota?.remaining ?? 0) <= 0 ? (
+                                    "Quota Exhausted"
+                                ) : (
+                                    <span className="flex items-center gap-2">
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                        </svg>
+                                        Generate Link
+                                    </span>
+                                )}
+                            </button>
+
                             <button
                                 type="button"
-                                onClick={() => setSingleUse(!singleUse)}
-                                className={`relative w-14 h-8 rounded-full transition-colors ${singleUse
-                                    ? "bg-primary-500"
-                                    : "bg-surface-300 dark:bg-surface-600"
-                                    }`}
+                                disabled={isDisabled}
+                                onClick={() => setIsEmailModalOpen(true)}
+                                className="btn-secondary"
                             >
-                                <span
-                                    className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow transition-transform ${singleUse ? "translate-x-6" : "translate-x-0"
-                                        }`}
-                                />
+                                <span className="flex items-center gap-2">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                    </svg>
+                                    Send via Email
+                                </span>
                             </button>
                         </div>
-                    )}
+                    </form>
 
-                    {/* Error Message */}
-                    {error && (
-                        <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
-                            <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                                    />
-                                </svg>
-                                <span className="text-sm">{error}</span>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Submit Button */}
-                    <button
-                        type="submit"
-                        disabled={isDisabled}
-                        className="btn-primary w-full text-base py-3"
-                    >
-                        {isLoading ? (
-                            <span className="flex items-center gap-2">
-                                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                                    <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                        fill="none"
-                                    />
-                                    <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    />
-                                </svg>
-                                Creating...
-                            </span>
-                        ) : !quota?.isUnlimited && (quota?.remaining ?? 0) <= 0 ? (
-                            "Quota Exhausted"
-                        ) : (
-                            <span className="flex items-center gap-2">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M12 4v16m8-8H4"
-                                    />
-                                </svg>
-                                Generate Invite
-                            </span>
-                        )}
-                    </button>
-                </form>
+                    <EmailInviteModal
+                        isOpen={isEmailModalOpen}
+                        onClose={() => setIsEmailModalOpen(false)}
+                        onSend={handleSendEmail}
+                        defaultMessage={DEFAULT_EMAIL_MESSAGE}
+                        isLoading={isLoading}
+                    />
+                </>
             )}
         </div>
     );

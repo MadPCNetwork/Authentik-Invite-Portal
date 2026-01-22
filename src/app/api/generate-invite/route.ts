@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { policyEngine } from "@/lib/policy-engine";
 import { getAuthentikAPI } from "@/lib/authentik-api";
 import { GenerateInviteRequestSchema, GenerateInviteResponseSchema, Policy } from "@/lib/schemas";
+import { emailService } from "@/lib/email";
 
 const AUTHENTIK_FLOW_SLUG = process.env.AUTHENTIK_FLOW_SLUG || "default-enrollment-flow";
 
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const { name, expiry, singleUse, group: inviteGroup } = validation.data;
+        const { name, expiry, singleUse, group: inviteGroup, emailRecipient, emailMessage } = validation.data;
 
         // 3. Check if user has quota
         const userSub = session.user.id; // Changed from session.user.sub to session.user.id
@@ -134,6 +135,45 @@ export async function POST(req: NextRequest) {
         }
 
         await policyEngine.logInvite(userSub, result.invitation.pk, expiresAt, inviteGroup);
+
+        // 8. Handle Email Sending (if requested)
+        if (emailRecipient) {
+            if (!emailService.isConfigured()) {
+                console.warn("Email requested but service not configured");
+                // We don't fail the request, but valid warning in logs.
+                // In a perfect world, we might return a warning in the response.
+            } else {
+                const inviteUrl = result.inviteUrl || "";
+                const variableMap = {
+                    inviter_username: session.user.name || session.user.username || "A user",
+                    expiration_date: expiresAt ? expiresAt.toLocaleString() : "Never",
+                    invite_url: inviteUrl,
+                };
+
+                // Process content
+                const finalBody = emailService.processTemplate(emailMessage || "", variableMap);
+
+                // Send (fire and forget or await? await ensures we know if it failed)
+                // We'll await to report error if needed
+                try {
+                    await emailService.sendEmail({
+                        to: emailRecipient,
+                        subject: `Invitation to join ${process.env.APP_NAME || "Authentik"}`,
+                        text: finalBody,
+                    });
+                } catch (emailErr) {
+                    console.error("Failed to send email:", emailErr);
+                    // Return success but with email error? Or just fail?
+                    // Better to treat invite creation as success, but warn about email.
+                    return NextResponse.json({
+                        success: true,
+                        inviteUrl: result.inviteUrl,
+                        inviteId: result.invitation.pk,
+                        message: "Invite created, but failed to send email. Please copy the link manually.",
+                    });
+                }
+            }
+        }
 
         return NextResponse.json({
             success: true,

@@ -2,14 +2,28 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function Navbar() {
     const { data: session } = useSession();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isUnlimited, setIsUnlimited] = useState(false);
 
     const adminGroup = session?.adminGroup ?? "Invite Portal Admins";
     const isAdmin = session?.user?.groups?.includes(adminGroup);
+
+    useEffect(() => {
+        if (session?.user) {
+            fetch("/api/user/quota")
+                .then(res => res.json())
+                .then(data => {
+                    if (data?.quota?.isUnlimited) {
+                        setIsUnlimited(true);
+                    }
+                })
+                .catch(err => console.error("Failed to check quota for navbar:", err));
+        }
+    }, [session]);
 
     return (
         <nav className="glass sticky top-0 z-50 border-b border-surface-200 dark:border-surface-700">
@@ -45,6 +59,19 @@ export function Navbar() {
                         >
                             Dashboard
                         </Link>
+                        {isUnlimited && (
+                            <Link
+                                href="/dashboard/bulk"
+                                className="btn-ghost text-sm flex items-center gap-2"
+                            >
+                                <span className="text-primary-600 dark:text-primary-400">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                </span>
+                                Bulk Invites
+                            </Link>
+                        )}
                         {isAdmin && (
                             <Link
                                 href="/admin"
@@ -100,6 +127,15 @@ export function Navbar() {
                                         >
                                             Dashboard
                                         </Link>
+                                        {isUnlimited && (
+                                            <Link
+                                                href="/dashboard/bulk"
+                                                className="block px-4 py-2 text-sm text-surface-700 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-800 rounded-lg"
+                                                onClick={() => setIsMenuOpen(false)}
+                                            >
+                                                Bulk Invites
+                                            </Link>
+                                        )}
                                         {isAdmin && (
                                             <Link
                                                 href="/admin"
