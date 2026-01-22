@@ -36,12 +36,14 @@ export class EmailService {
         const user = process.env.SMTP_USERNAME;
         const pass = process.env.SMTP_PASSWORD;
         const useTls = process.env.SMTP_USE_TLS === "true";
+        const helloName = process.env.SMTP_HELLO_NAME || "invite-portal.local";
 
         if (host && user && pass) {
             this.transporter = nodemailer.createTransport({
                 host,
                 port,
                 secure: port === 465,
+                name: helloName, // Fix for Google SMTP 421-4.7.0 EHLO error
                 pool: true, // Use connection pooling
                 maxConnections: 5, // Limit concurrent connections
                 maxMessages: 100, // Limit messages per connection

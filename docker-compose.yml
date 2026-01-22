@@ -36,6 +36,7 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_USE_TLS=${SMTP_USE_TLS}
       - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_HELLO_NAME=${SMTP_HELLO_NAME}
       - APP_NAME=${APP_NAME}
 
       # Public environment variables (for client-side)
