@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const { name, expiry, singleUse, group: inviteGroup, emailRecipient, emailMessage } = validation.data;
+        const { name, expiry, singleUse, groups: inviteGroups = [], emailRecipient, emailMessage } = validation.data;
 
         // 3. Check if user has quota
         const userSub = session.user.id; // Changed from session.user.sub to session.user.id
@@ -80,9 +80,9 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        if (inviteGroup && !policyEngine.isGroupAllowed(policy, inviteGroup)) {
+        if (inviteGroups.length > 0 && !policyEngine.isGroupAllowed(policy, inviteGroups)) {
             return NextResponse.json(
-                { success: false, error: "Group not allowed" },
+                { success: false, error: "One or more selected groups are not allowed" },
                 { status: 403 }
             );
         }
@@ -109,6 +109,9 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // Expand grouping names to actual authentik groups
+        const expandedGroups = policyEngine.expandGroups(policy, inviteGroups);
+
         // 6. Create invite in Authentik
         const result = await api.createInvitation({
             name,
@@ -117,7 +120,7 @@ export async function POST(req: NextRequest) {
             flowSlug: AUTHENTIK_FLOW_SLUG,
             flowPk: flow.pk,
             creatorUsername: session.user.username || session.user.name || undefined,
-            fixedData: inviteGroup ? { invite_group: inviteGroup } : undefined,
+            fixedData: expandedGroups.length > 0 ? { invite_groups: expandedGroups } : undefined,
         });
 
         if (!result.success || !result.invitation) {
@@ -134,7 +137,9 @@ export async function POST(req: NextRequest) {
             expiresAt = new Date(result.invitation.expires);
         }
 
-        await policyEngine.logInvite(userSub, result.invitation.pk, expiresAt, inviteGroup);
+        // Log the selected grouping names, not the expanded underlying groups, to keep it cleaner in UI
+        const loggedGroups = inviteGroups.length > 0 ? inviteGroups.join(", ") : undefined;
+        await policyEngine.logInvite(userSub, result.invitation.pk, expiresAt, loggedGroups);
 
         // 8. Handle Email Sending (if requested)
         if (emailRecipient) {

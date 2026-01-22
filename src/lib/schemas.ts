@@ -9,10 +9,15 @@ export const QuotaConfigSchema = z.object({
     period: z.enum(["day", "week", "month", "year"]).optional(),
 });
 
+export const GroupingSchema = z.object({
+    name: z.string(),
+    groups: z.array(z.string()),
+});
+
 export const InviteConfigSchema = z.object({
     max_expiry: z.string(),
     allow_multi_use: z.boolean(),
-    allowed_groups: z.array(z.string()).optional(),
+    allowed_groups: z.array(GroupingSchema).optional(),
 });
 
 export const PolicySchema = z.object({
@@ -34,7 +39,8 @@ export const GenerateInviteRequestSchema = z.object({
     name: z.string().min(1, "Invite name is required").max(100),
     expiry: z.string().min(1, "Expiry is required"),
     singleUse: z.boolean().default(true),
-    group: z.string().optional(),
+    // Changed: group -> groups (array of strings)
+    groups: z.array(z.string()).optional(),
     emailRecipient: z.string().email().optional(),
     emailMessage: z.string().optional(),
 });

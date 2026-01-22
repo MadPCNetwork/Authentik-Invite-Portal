@@ -9,8 +9,19 @@
                 "max_expiry": "1y",
                 "allow_multi_use": true,
                 "allowed_groups": [
-                    "MadPC",
-                    "Legend"
+                    {
+                        "name": "Member",
+                        "groups": [
+                            "MadPC"
+                        ]
+                    },
+                    {
+                        "name": "Legend",
+                        "groups": [
+                            "Legend",
+                            "MadPC"
+                        ]
+                    }
                 ]
             }
         },
@@ -25,8 +36,19 @@
                 "max_expiry": "7d",
                 "allow_multi_use": false,
                 "allowed_groups": [
-                    "MadPC",
-                    "Legend"
+                    {
+                        "name": "Member",
+                        "groups": [
+                            "MadPC"
+                        ]
+                    },
+                    {
+                        "name": "Legend",
+                        "groups": [
+                            "Legend",
+                            "MadPC"
+                        ]
+                    }
                 ]
             }
         }
@@ -40,7 +62,12 @@
             "max_expiry": "24h",
             "allow_multi_use": false,
             "allowed_groups": [
-                "MadPC"
+                {
+                    "name": "Member",
+                    "groups": [
+                        "MadPC"
+                    ]
+                }
             ]
         }
     }

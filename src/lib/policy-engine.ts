@@ -71,6 +71,10 @@ export class PolicyEngine {
      * Resolves the most permissive policy for a user based on their groups.
      * Priority: Higher limits and more permissions win.
      */
+    /**
+     * Resolves the most permissive policy for a user based on their groups.
+     * Priority: Higher limits and more permissions win.
+     */
     getUserPolicy(groups: string[]): ResolvedPolicy {
         const matchingPolicies = this.config.policies.filter((p) =>
             groups.includes(p.group)
@@ -97,18 +101,18 @@ export class PolicyEngine {
         }
 
         // Merge invite settings (most permissive wins for each setting)
-        // Merge allowed_groups from all matching policies (union of all groups)
-        const allGroups = new Set<string>();
+        // Merge allowed_groups from all matching policies (union of all groups by name)
+        const allGroups = new Map<string, { name: string; groups: string[] }>();
         for (const policy of matchingPolicies) {
-            for (const group of policy.invite.allowed_groups ?? []) {
-                allGroups.add(group);
+            for (const grouping of policy.invite.allowed_groups ?? []) {
+                allGroups.set(grouping.name, grouping);
             }
         }
 
         const mergedInvite: InviteConfig = {
             max_expiry: this.getMostPermissiveExpiry(matchingPolicies.map((p) => p.invite.max_expiry)),
             allow_multi_use: matchingPolicies.some((p) => p.invite.allow_multi_use),
-            allowed_groups: allGroups.size > 0 ? Array.from(allGroups) : this.config.default.invite.allowed_groups,
+            allowed_groups: allGroups.size > 0 ? Array.from(allGroups.values()) : this.config.default.invite.allowed_groups,
         };
 
         return {
@@ -245,11 +249,36 @@ export class PolicyEngine {
     }
 
     /**
-     * Validates if the requested group is allowed by the policy.
+     * Validates if the requested groups are allowed by the policy.
+     * @param policy The user's policy
+     * @param requestedGroups Array of grouping NAMES
      */
-    isGroupAllowed(policy: ResolvedPolicy, requestedGroup: string): boolean {
-        const allowedGroups = policy.invite.allowed_groups ?? [];
-        return allowedGroups.length === 0 || allowedGroups.includes(requestedGroup);
+    isGroupAllowed(policy: ResolvedPolicy, requestedGroups: string[]): boolean {
+        const allowedGroupings = policy.invite.allowed_groups ?? [];
+        if (allowedGroupings.length === 0 && requestedGroups.length === 0) return true;
+        if (allowedGroupings.length === 0 && requestedGroups.length > 0) return false;
+
+        const allowedNames = allowedGroupings.map(g => g.name);
+
+        return requestedGroups.every(name => allowedNames.includes(name));
+    }
+
+    /**
+     * Expands a list of grouping names into a flat list of actual Authentik groups.
+     */
+    expandGroups(policy: ResolvedPolicy, groupingNames: string[]): string[] {
+        const allowedGroupings = policy.invite.allowed_groups ?? [];
+        const result = new Set<string>();
+
+        for (const name of groupingNames) {
+            const grouping = allowedGroupings.find(g => g.name === name);
+            if (grouping) {
+                for (const group of grouping.groups) {
+                    result.add(group);
+                }
+            }
+        }
+        return Array.from(result);
     }
 
     /**

@@ -63,6 +63,10 @@ Go to **Customization → Policies → Expression Policies** and create a policy
 ```python
 from authentik.core.models import Group
 
+# Optional: Safety Whitelist
+# Only allow these specific groups to be assigned via invites
+ALLOWED_GROUPS = ["MadPC", "Legend", "Users", "Admins"]
+
 # 1. Fetch context data
 prompt_data = request.context.get("prompt_data", {})
 user = request.context.get("pending_user")
@@ -79,14 +83,25 @@ if "invited_by" in prompt_data:
     user.save()
 
 # 4. Handle Dynamic Group Assignment
-invite_group_name = prompt_data.get("invite_group")
+# Supports multiple groups via 'invite_groups' list
+invite_groups = prompt_data.get("invite_groups", [])
 
-if invite_group_name:
-    group = Group.objects.filter(name=invite_group_name).first()
-    if group:
-        group.users.add(user)
-    else:
-        ak_message(f"Warning: Group '{invite_group_name}' not found.")
+# Fallback for legacy single-group invites
+if not invite_groups and "invite_group" in prompt_data:
+    invite_groups = [prompt_data["invite_group"]]
+
+if invite_groups:
+    for group_name in invite_groups:
+        # Safety: Verify group is allowed
+        if group_name not in ALLOWED_GROUPS:
+             ak_message(f"Warning: Attempted to assign unauthorized group '{group_name}'.")
+             continue
+
+        group = Group.objects.filter(name=group_name).first()
+        if group:
+            group.users.add(user)
+        else:
+            ak_message(f"Warning: Group '{group_name}' not found.")
 
 return True
 ```
@@ -112,7 +127,16 @@ Edit `config/invite-policies.json` to customize group-based policies:
       "invite": { 
           "max_expiry": "1y", 
           "allow_multi_use": true,
-          "allowed_groups": ["Admins", "Users"]
+          "allowed_groups": [
+              {
+                  "name": "Admin Role",
+                  "groups": ["Admins", "SuperUsers"]
+              },
+              {
+                  "name": "Standard User",
+                  "groups": ["Users"]
+              }
+          ]
       }
     }
   ]
