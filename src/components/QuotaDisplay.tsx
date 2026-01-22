@@ -77,7 +77,9 @@ export function QuotaDisplay({ quota, isLoading, sourceGroup }: QuotaDisplayProp
                 {/* Progress bar */}
                 <div className="relative h-3 bg-surface-100 dark:bg-surface-800 rounded-full overflow-hidden mb-4">
                     <div
-                        className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${percentage >= 100
+                        className={`absolute left-0 top-0 h-full rounded-full transition-all duration-500 ${quota.isUnlimited
+                            ? "bg-surface-400 dark:bg-surface-600 opacity-50"
+                            : percentage >= 100
                                 ? "bg-gradient-to-r from-red-500 to-red-600"
                                 : percentage >= 75
                                     ? "bg-gradient-to-r from-amber-500 to-amber-600"
@@ -97,10 +99,10 @@ export function QuotaDisplay({ quota, isLoading, sourceGroup }: QuotaDisplayProp
                     </span>
                     <span
                         className={`font-medium ${quota.isUnlimited
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : (quota.remaining ?? 0) <= 0
-                                    ? "text-red-600 dark:text-red-400"
-                                    : "text-surface-700 dark:text-surface-300"
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : (quota.remaining ?? 0) <= 0
+                                ? "text-red-600 dark:text-red-400"
+                                : "text-surface-700 dark:text-surface-300"
                             }`}
                     >
                         {quota.isUnlimited ? (
