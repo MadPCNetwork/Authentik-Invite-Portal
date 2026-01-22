@@ -30,6 +30,7 @@ interface AuthentikUser {
     name: string;
     email: string;
     uid: string;
+    is_active: boolean;
 }
 
 interface AuthentikUsersResponse {
@@ -262,7 +263,7 @@ export class AuthentikAPI {
     /**
      * Search for users in Authentik.
      */
-    async searchUsers(query: string): Promise<Array<{ id: string; name: string; username: string; email: string }>> {
+    async searchUsers(query: string): Promise<Array<{ id: string; name: string; username: string; email: string; is_active: boolean }>> {
         try {
             const params = new URLSearchParams({
                 search: query,
@@ -279,6 +280,7 @@ export class AuthentikAPI {
                 name: user.name,
                 username: user.username,
                 email: user.email,
+                is_active: user.is_active,
             }));
         } catch (error) {
             console.error("Failed to search users:", error);
@@ -287,18 +289,30 @@ export class AuthentikAPI {
     }
 
     /**
+     * Get a single user by username.
+     */
+    async getUserByUsername(username: string): Promise<{ id: string; name: string; username: string; email: string; is_active: boolean } | null> {
+        // Use search but filter for exact match
+        const users = await this.searchUsers(username);
+        return users.find(u => u.username === username) || null;
+    }
+
+    /**
      * Get a single user by ID.
      */
-    async getUser(id: string): Promise<{ id: string; name: string; username: string; email: string } | null> {
+    async getUser(id: string): Promise<{ id: string; name: string; username: string; email: string; is_active: boolean } | null> {
         try {
             const response = await this.request<AuthentikUser>(`/api/v3/core/users/${id}/`);
+            console.log("Authentik getUser response:", JSON.stringify(response, null, 2));
             return {
                 id: response.uid,
                 name: response.name,
                 username: response.username,
                 email: response.email,
+                is_active: response.is_active,
             };
-        } catch {
+        } catch (error) {
+            console.error(`Failed to fetch user ${id}:`, error);
             return null;
         }
     }

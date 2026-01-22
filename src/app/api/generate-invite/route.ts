@@ -18,6 +18,29 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // 1.5. Validate user status in Authentik
+        const api = getAuthentikAPI();
+        const username = session.user.username;
+
+        if (!username) {
+            console.error("Session missing username:", session.user);
+            return NextResponse.json(
+                { success: false, error: "Invalid session: missing username" },
+                { status: 401 }
+            );
+        }
+
+        console.log("Verifying user status for username:", username);
+        const user = await api.getUserByUsername(username);
+
+        if (!user || user.is_active === false) {
+            console.log("User verification failed:", user ? "Inactive" : "Not Found");
+            return NextResponse.json(
+                { success: false, error: "Account is inactive or disabled" },
+                { status: 403 }
+            );
+        }
+
         // 2. Parse and validate request body
         const body = await req.json();
         const validation = GenerateInviteRequestSchema.safeParse(body);
@@ -74,7 +97,8 @@ export async function POST(req: NextRequest) {
         }
 
         // 5. Get static flow info
-        const api = getAuthentikAPI();
+        // const api = getAuthentikAPI(); // Already instantiated above
+
         const flow = await api.getFlow(AUTHENTIK_FLOW_SLUG);
 
         if (!flow) {
