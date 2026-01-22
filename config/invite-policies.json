@@ -8,6 +8,7 @@
             "invite": {
                 "max_expiry": "1y",
                 "allow_multi_use": true,
+                "require_group_selection": true,
                 "allowed_groups": [
                     {
                         "name": "Member",
@@ -35,6 +36,7 @@
             "invite": {
                 "max_expiry": "7d",
                 "allow_multi_use": false,
+                "require_group_selection": true,
                 "allowed_groups": [
                     {
                         "name": "Member",
@@ -61,6 +63,7 @@
         "invite": {
             "max_expiry": "24h",
             "allow_multi_use": false,
+            "require_group_selection": true,
             "allowed_groups": [
                 {
                     "name": "Member",

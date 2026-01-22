@@ -15,11 +15,11 @@ interface TemplateVariables {
 }
 
 export class EmailService {
+    private transporter: nodemailer.Transporter | null = null;
     private fromEmail: string = "noreply@example.com";
     private appName: string = "Authentik";
 
     constructor() {
-        // Initial setup try
         this.reloadConfig();
     }
 
@@ -29,6 +29,8 @@ export class EmailService {
     }
 
     private getTransporter() {
+        if (this.transporter) return this.transporter;
+
         const host = process.env.SMTP_HOST;
         const port = parseInt(process.env.SMTP_PORT || "587");
         const user = process.env.SMTP_USERNAME;
@@ -36,19 +38,24 @@ export class EmailService {
         const useTls = process.env.SMTP_USE_TLS === "true";
 
         if (host && user && pass) {
-            return nodemailer.createTransport({
+            this.transporter = nodemailer.createTransport({
                 host,
                 port,
-                secure: port === 465, // true for 465, false for other ports
+                secure: port === 465,
+                pool: true, // Use connection pooling
+                maxConnections: 5, // Limit concurrent connections
+                maxMessages: 100, // Limit messages per connection
+                rateDelta: 1000, // Limit message rate (1 second window)
+                rateLimit: 5, // Max 5 messages per second
                 auth: {
                     user,
                     pass,
                 },
                 tls: {
-                    // unexpected certs
                     rejectUnauthorized: !useTls ? false : true,
                 },
             });
+            return this.transporter;
         }
         return null;
     }
@@ -60,19 +67,11 @@ export class EmailService {
         const hasPass = !!process.env.SMTP_PASSWORD;
 
         const configured = hasHost && hasUser && hasPass;
-
-        if (!configured) {
-            console.warn("[EmailService] Check Failed. Environment Variables State:", {
-                SMTP_HOST: hasHost ? "Set" : "Missing",
-                SMTP_USERNAME: hasUser ? "Set" : "Missing",
-                SMTP_PASSWORD: hasPass ? "Set" : "Missing"
-            });
-        }
         return configured;
     }
 
     async sendEmail({ to, subject, text, html }: SendEmailParams): Promise<boolean> {
-        this.reloadConfig();
+        // Reuse existing transporter
         const transporter = this.getTransporter();
 
         if (!transporter) {
@@ -81,7 +80,7 @@ export class EmailService {
         }
 
         try {
-            console.log(`[EmailService] Attempting to send email to ${to} via ${process.env.SMTP_HOST}:${process.env.SMTP_PORT}`);
+            console.log(`[EmailService] Attempting to send email to ${to}`);
             await transporter.sendMail({
                 from: `"${this.appName}" <${this.fromEmail}>`,
                 to,
@@ -93,6 +92,8 @@ export class EmailService {
             return true;
         } catch (error) {
             console.error("[EmailService] Failed to send email:", error);
+            // If connection failure, maybe invalidate transporter to force recreation next time?
+            // this.transporter = null; 
             throw error;
         }
     }

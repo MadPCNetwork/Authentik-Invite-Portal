@@ -11,7 +11,7 @@ const BulkInviteRequestSchema = z.object({
     message: z.string(),
     expiry: z.string(),
     singleUse: z.boolean(),
-    group: z.string().optional(),
+    groups: z.array(z.string()).optional(),
 });
 
 const AUTHENTIK_FLOW_SLUG = process.env.AUTHENTIK_FLOW_SLUG || "default-enrollment-flow";
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const { emails, message, expiry, singleUse, group: inviteGroup } = validation.data;
+        const { emails, message, expiry, singleUse, groups: inviteGroups = [] } = validation.data;
 
         // Parse emails
         const emailList = emails
@@ -64,6 +64,25 @@ export async function POST(req: NextRequest) {
             }
         }
 
+        // Validate Groups
+        if (policy.invite.require_group_selection && inviteGroups.length === 0) {
+            return NextResponse.json(
+                { success: false, error: "Group selection is required" },
+                { status: 400 }
+            );
+        }
+
+        if (inviteGroups.length > 0 && !policyEngine.isGroupAllowed(policy, inviteGroups)) {
+            return NextResponse.json(
+                { success: false, error: "One or more selected groups are not allowed" },
+                { status: 403 }
+            );
+        }
+
+        // Expand Groups
+        const expandedGroups = policyEngine.expandGroups(policy, inviteGroups);
+        const loggedGroups = inviteGroups.length > 0 ? inviteGroups.join(", ") : undefined;
+
         const api = getAuthentikAPI();
         const flow = await api.getFlow(AUTHENTIK_FLOW_SLUG);
 
@@ -89,7 +108,7 @@ export async function POST(req: NextRequest) {
                         flowSlug: AUTHENTIK_FLOW_SLUG,
                         flowPk: flow.pk,
                         creatorUsername: session.user.username,
-                        fixedData: inviteGroup ? { invite_group: inviteGroup } : undefined,
+                        fixedData: expandedGroups.length > 0 ? { invite_groups: expandedGroups } : undefined,
                     });
 
                     if (inviteRes.success && inviteRes.invitation) {
@@ -98,7 +117,7 @@ export async function POST(req: NextRequest) {
                         if (inviteRes.invitation.expires) {
                             expiresAt = new Date(inviteRes.invitation.expires);
                         }
-                        await policyEngine.logInvite(userSub, inviteRes.invitation.pk, expiresAt, inviteGroup);
+                        await policyEngine.logInvite(userSub, inviteRes.invitation.pk, expiresAt, loggedGroups);
 
                         // Send Email
                         if (emailService.isConfigured()) {
@@ -136,7 +155,7 @@ export async function POST(req: NextRequest) {
                     flowSlug: AUTHENTIK_FLOW_SLUG,
                     flowPk: flow.pk,
                     creatorUsername: session.user.username,
-                    fixedData: inviteGroup ? { invite_group: inviteGroup } : undefined
+                    fixedData: expandedGroups.length > 0 ? { invite_groups: expandedGroups } : undefined,
                 });
 
                 if (inviteRes.success && inviteRes.invitation) {
@@ -145,7 +164,7 @@ export async function POST(req: NextRequest) {
                     if (inviteRes.invitation.expires) {
                         expiresAt = new Date(inviteRes.invitation.expires);
                     }
-                    await policyEngine.logInvite(userSub, inviteRes.invitation.pk, expiresAt, inviteGroup);
+                    await policyEngine.logInvite(userSub, inviteRes.invitation.pk, expiresAt, loggedGroups);
 
                     // Send Emails in Loop
                     if (emailService.isConfigured()) {

@@ -13,7 +13,8 @@ interface QuotaData {
     expiryOptions: Array<{ value: string; label: string }>;
     allowMultiUse: boolean;
     sourceGroup: string | null;
-    groups: string[];
+    groups: any[]; // Or proper type {name: string, groups: string[]}[]
+    requireGroupSelection: boolean;
 }
 
 export default function BulkPage() {
@@ -36,7 +37,8 @@ export default function BulkPage() {
 
                 setQuotaData({
                     ...qData,
-                    groups: gData.groups || []
+                    groups: gData.groups || [],
+                    requireGroupSelection: !!gData.required
                 });
             }
         } catch (error) {
@@ -131,6 +133,7 @@ export default function BulkPage() {
                             expiryOptions={quotaData?.expiryOptions ?? []}
                             groups={quotaData?.groups ?? []}
                             onBulkInvite={handleBulkInvite}
+                            requireGroupSelection={quotaData?.requireGroupSelection ?? false}
                         />
                     </div>
                 </div>

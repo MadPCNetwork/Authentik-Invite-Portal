@@ -80,6 +80,13 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        if (policy.invite.require_group_selection && inviteGroups.length === 0) {
+            return NextResponse.json(
+                { success: false, error: "Group selection is required" },
+                { status: 400 }
+            );
+        }
+
         if (inviteGroups.length > 0 && !policyEngine.isGroupAllowed(policy, inviteGroups)) {
             return NextResponse.json(
                 { success: false, error: "One or more selected groups are not allowed" },

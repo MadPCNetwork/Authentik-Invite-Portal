@@ -31,6 +31,7 @@ export function CreateInviteForm({
     const [singleUse, setSingleUse] = useState(true);
     const [availableGroupings, setAvailableGroupings] = useState<{ name: string, groups: string[] }[]>([]);
     const [selectedGroupings, setSelectedGroupings] = useState<string[]>([]);
+    const [isGroupSelectionRequired, setIsGroupSelectionRequired] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [successUrl, setSuccessUrl] = useState<string | null>(null);
@@ -47,8 +48,15 @@ export function CreateInviteForm({
             .then(data => {
                 if (data.groups && Array.isArray(data.groups)) {
                     setAvailableGroupings(data.groups);
-                    // Pre-select first one if desired, or none
-                    // setSelectedGroupings([]);
+
+                    // Set requirement
+                    const required = !!data.required;
+                    setIsGroupSelectionRequired(required);
+
+                    // Pre-select first one by default
+                    if (data.groups.length > 0) {
+                        setSelectedGroupings([data.groups[0].name]);
+                    }
                 }
             })
             .catch(err => console.error("Failed to fetch groups:", err));
@@ -56,9 +64,16 @@ export function CreateInviteForm({
 
     const isDisabled =
         isLoading ||
-        (!quota?.isUnlimited && (quota?.remaining ?? 0) <= 0);
+        (!quota?.isUnlimited && (quota?.remaining ?? 0) <= 0) ||
+        (isGroupSelectionRequired && selectedGroupings.length === 0);
 
     const handleGenerate = async (emailData?: { recipient: string; message: string }) => {
+        // Validation for requirement
+        if (isGroupSelectionRequired && selectedGroupings.length === 0) {
+            setError("Group selection is required");
+            return;
+        }
+
         setError(null);
         setWarning(null);
         setSuccessUrl(null);
@@ -115,6 +130,11 @@ export function CreateInviteForm({
             setIsLoading(false);
         }
     };
+
+    // ... handleSubmit, handleSendEmail, handleCopy, toggleGrouping ...
+
+    // (skipping identical methods for brevity in replacement, but wait, I need to include them or use multi_replace.
+    // simpler to just replace the block including everything up to UI render logic)
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -248,6 +268,7 @@ export function CreateInviteForm({
                             <div>
                                 <label className="label mb-2">
                                     Attach Groups
+                                    {isGroupSelectionRequired && <span className="text-primary-500 ml-1">*</span>}
                                     <span className="ml-2 text-xs font-normal text-surface-500">
                                         (Select which groups effectively get applied)
                                     </span>

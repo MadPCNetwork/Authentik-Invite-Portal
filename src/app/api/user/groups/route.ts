@@ -24,7 +24,8 @@ export async function GET() {
 
         // Return simpler structure for frontend
         return NextResponse.json({
-            groups: allowedGroups
+            groups: allowedGroups,
+            required: policy.invite.require_group_selection ?? false
         });
     } catch (error) {
         console.error("Error fetching allowed groups:", error);

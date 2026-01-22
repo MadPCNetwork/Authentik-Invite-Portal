@@ -17,6 +17,7 @@ export const GroupingSchema = z.object({
 export const InviteConfigSchema = z.object({
     max_expiry: z.string(),
     allow_multi_use: z.boolean(),
+    require_group_selection: z.boolean().default(false).optional(),
     allowed_groups: z.array(GroupingSchema).optional(),
 });
 

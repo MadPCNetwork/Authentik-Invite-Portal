@@ -7,11 +7,10 @@ interface ExpiryOption {
     value: string;
     label: string;
 }
-
 interface BulkInviteFormProps {
     quota: QuotaStatus | null;
     expiryOptions: ExpiryOption[];
-    groups: string[];
+    groups: { name: string; groups: string[] }[]; // Updated type
     onBulkInvite: (data: any) => Promise<void>;
 }
 
@@ -20,18 +19,19 @@ Please accept this invitation to access your resources by clicking the link belo
 {{invite_url}}
 
 Note: This invitation is valid until {{expiration_date}}.`;
-
 export function BulkInviteForm({
     quota,
     expiryOptions,
     groups,
     onBulkInvite,
-}: BulkInviteFormProps) {
+    requireGroupSelection = false,
+}: BulkInviteFormProps & { requireGroupSelection?: boolean }) {
     const [emails, setEmails] = useState("");
     const [message, setMessage] = useState(DEFAULT_EMAIL_MESSAGE);
     const [expiry, setExpiry] = useState(expiryOptions[0]?.value ?? "24h");
     const [singleUse, setSingleUse] = useState(true);
-    const [selectedGroup, setSelectedGroup] = useState(groups[0] || "");
+    // Initialize with first group if available
+    const [selectedGroupings, setSelectedGroupings] = useState<string[]>(groups.length > 0 ? [groups[0].name] : []);
     const [isLoading, setIsLoading] = useState(false);
     const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
@@ -52,13 +52,19 @@ export function BulkInviteForm({
             return;
         }
 
+        if (requireGroupSelection && selectedGroupings.length === 0) {
+            setStatus({ type: 'error', message: "Group selection is required." });
+            setIsLoading(false);
+            return;
+        }
+
         try {
             await onBulkInvite({
                 emails,
                 message,
                 expiry,
                 singleUse,
-                group: selectedGroup,
+                groups: selectedGroupings,
             });
             setStatus({ type: 'success', message: "Bulk invite process started." });
             setEmails("");
@@ -70,6 +76,16 @@ export function BulkInviteForm({
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const toggleGrouping = (groupName: string) => {
+        setSelectedGroupings(prev => {
+            if (prev.includes(groupName)) {
+                return prev.filter(g => g !== groupName);
+            } else {
+                return [...prev, groupName];
+            }
+        });
     };
 
     return (
@@ -97,25 +113,53 @@ export function BulkInviteForm({
                     />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Group Select */}
+                <div className="grid grid-cols-1 gap-6">
+                    {/* Group Selection */}
                     {groups.length > 0 && (
                         <div>
-                            <label htmlFor="group" className="label">
+                            <label className="label mb-2">
                                 Add to Group
+                                {requireGroupSelection && <span className="text-primary-500 ml-1">*</span>}
                             </label>
-                            <select
-                                id="group"
-                                value={selectedGroup}
-                                onChange={(e) => setSelectedGroup(e.target.value)}
-                                className="input"
-                            >
-                                {groups.map((group) => (
-                                    <option key={group} value={group}>
-                                        {group}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="space-y-2 border border-surface-200 dark:border-surface-700 rounded-xl p-3 bg-surface-50 dark:bg-surface-800/50">
+                                {groups.map((grouping) => {
+                                    const isSelected = selectedGroupings.includes(grouping.name);
+                                    return (
+                                        <div
+                                            key={grouping.name}
+                                            onClick={() => toggleGrouping(grouping.name)}
+                                            className={`
+                                                relative flex items-start gap-3 p-3 rounded-lg cursor-pointer border transition-all
+                                                ${isSelected
+                                                    ? "bg-primary-50 border-primary-200 dark:bg-primary-900/20 dark:border-primary-800"
+                                                    : "bg-surface-100 dark:bg-surface-800 border-transparent hover:border-surface-300 dark:hover:border-surface-600"
+                                                }
+                                            `}
+                                        >
+                                            <div className={`mt-0.5 w-5 h-5 rounded border flex items-center justify-center transition-colors
+                                                ${isSelected
+                                                    ? "bg-primary-500 border-primary-500 text-white"
+                                                    : "bg-white dark:bg-surface-900 border-surface-300 dark:border-surface-600"
+                                                }
+                                            `}>
+                                                {isSelected && (
+                                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                )}
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="font-medium text-surface-900 dark:text-white text-sm">
+                                                    {grouping.name}
+                                                </div>
+                                                <div className="text-xs text-surface-500 dark:text-surface-400 mt-0.5">
+                                                    Includes: {grouping.groups.join(", ")}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
 

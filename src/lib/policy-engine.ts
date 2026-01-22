@@ -112,6 +112,8 @@ export class PolicyEngine {
         const mergedInvite: InviteConfig = {
             max_expiry: this.getMostPermissiveExpiry(matchingPolicies.map((p) => p.invite.max_expiry)),
             allow_multi_use: matchingPolicies.some((p) => p.invite.allow_multi_use),
+            // permissive means "not required", so if any policy says false (or undefined), it is false.
+            require_group_selection: matchingPolicies.every((p) => p.invite.require_group_selection === true),
             allowed_groups: allGroups.size > 0 ? Array.from(allGroups.values()) : this.config.default.invite.allowed_groups,
         };
 
