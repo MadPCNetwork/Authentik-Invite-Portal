@@ -7,6 +7,9 @@ A standalone invitation portal application that interfaces with Authentik Identi
 - **Authentik OIDC Authentication** - Secure login via your existing Authentik instance
 - **Group-Based Permissions** - Quota and permission policies based on Authentik groups
 - **Flexible Quota System** - Fixed, recurring, or unlimited invite quotas per group
+- **SMTP Email Delivery** - Send invites directly via email with customizable templates
+- **Bulk Invite Creation** - Generate multiple unique invites in one action
+- **Invite Management** - Delete and manage active invites
 - **Audit Logging** - All invite creations tracked in SQLite database
 - **Admin Panel** - Global statistics and quota management for administrators
 
@@ -25,6 +28,13 @@ A standalone invitation portal application that interfaces with Authentik Identi
    - `AUTHENTIK_API_TOKEN` - Service account token for API access
    - `NEXTAUTH_SECRET` - Generate with `openssl rand -base64 32`
    - `AUTHENTIK_FLOW_SLUG` - The flow to use for invites (e.g., `default-enrollment-flow`)
+   - `SMTP_HOST` - SMTP server host
+   - `SMTP_PORT` - SMTP server port
+   - `SMTP_USERNAME` - SMTP username
+   - `SMTP_PASSWORD` - SMTP password
+   - `SMTP_USE_TLS` - Enable TLS for SMTP connection (true/false)
+   - `SMTP_FROM_EMAIL` - Email address to send invites from
+   - `APP_NAME` - Application name to display in emails
 
 3. **Start the application:**
    ```bash
@@ -135,3 +145,4 @@ npm run dev
 - **Database:** SQLite via Prisma
 - **Styling:** Tailwind CSS
 - **Validation:** Zod
+- **Email:** Nodemailer
