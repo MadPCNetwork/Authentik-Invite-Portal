@@ -67,6 +67,14 @@ export class EmailService {
         const hasPass = !!process.env.SMTP_PASSWORD;
 
         const configured = hasHost && hasUser && hasPass;
+
+        if (!configured) {
+            console.warn("[EmailService] Check Failed. Environment Variables State:", {
+                SMTP_HOST: hasHost ? "Set" : "Missing",
+                SMTP_USERNAME: hasUser ? "Set" : "Missing",
+                SMTP_PASSWORD: hasPass ? "Set" : "Missing"
+            });
+        }
         return configured;
     }
 

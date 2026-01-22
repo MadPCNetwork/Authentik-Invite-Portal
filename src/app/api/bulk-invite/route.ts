@@ -87,6 +87,7 @@ export async function POST(req: NextRequest) {
         const flow = await api.getFlow(AUTHENTIK_FLOW_SLUG);
 
         if (!flow) {
+            console.error(`Flow configuration error: Could not find flow with slug '${AUTHENTIK_FLOW_SLUG}'`);
             return NextResponse.json({ success: false, error: "Flow configuration error" }, { status: 500 });
         }
 
