@@ -64,7 +64,13 @@ export class PolicyEngine {
 
     constructor() {
         // Validate and parse the config at startup
-        this.config = PolicyConfigSchema.parse(policiesConfig);
+        try {
+            this.config = PolicyConfigSchema.parse(policiesConfig);
+        } catch (error) {
+            console.error("Failed to parse policy configuration:", error);
+            console.error("Raw config:", JSON.stringify(policiesConfig, null, 2));
+            throw error;
+        }
     }
 
     /**
